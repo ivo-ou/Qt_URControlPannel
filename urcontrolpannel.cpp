@@ -34,6 +34,24 @@ URControlPannel::~URControlPannel()
     delete ui;
 }
 
+void URControlPannel::mousePressEvent(QMouseEvent *event)
+{
+    if(event->button() == Qt::LeftButton)
+    {
+        mLazyUpdate = true;
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void URControlPannel::mouseReleaseEvent(QMouseEvent *event)
+{
+    if(event->button() == Qt::LeftButton)
+    {
+        mLazyUpdate = false;
+    }
+    QWidget::mouseReleaseEvent(event);
+}
+
 void URControlPannel::initConnection()
 {
     connect(m_pTCPSocketObject_RealTime, &TCPSocketObject::sig_connected, this, &URControlPannel::slot_sockedConnect);
@@ -52,41 +70,92 @@ void URControlPannel::praseHexData(QByteArray array)
     if (msglengh == array.size())
     {
 
-        auto parseData = PraseArray(array.toHex());
-        // 状态返回
-        if( parseData.size() >=60)
+        // 状态懒刷新 8ms * 50 = 0.4s刷新一次
+        static int lazy_update = 0;
+        if((lazy_update == 50 && mLazyUpdate) || !mLazyUpdate)
         {
-            mURPosition.SetX(parseData[55]);
-            mURPosition.SetY(parseData[56]);
-            mURPosition.SetZ(parseData[57]);
-            mURPosition.SetRX(parseData[58]);
-            mURPosition.SetRY(parseData[59]);
-            mURPosition.SetRZ(parseData[60]);
-        }
+            auto parseData = PraseArray(array.toHex());
+            // 状态返回
+            if( parseData.size() >=60)
+            {
+                // 坐标
+                mURPosition.SetX(parseData[55]);
+                mURPosition.SetY(parseData[56]);
+                mURPosition.SetZ(parseData[57]);
+                mURPosition.SetRX(parseData[58]);
+                mURPosition.SetRY(parseData[59]);
+                mURPosition.SetRZ(parseData[60]);
+            }
 
-        // Joint
-        if( parseData.size() >=36)
-        {
-            mURPosition.SetJoint1(parseData[31]);
-            mURPosition.SetJoint2(parseData[32]);
-            mURPosition.SetJoint3(parseData[33]);
-            mURPosition.SetJoint4(parseData[34]);
-            mURPosition.SetJoint5(parseData[35]);
-            mURPosition.SetJoint6(parseData[36]);
-            this->updateURPosition();
-        }
+            // Joint
+            if( parseData.size() >=36)
+            {
+                mURPosition.SetJoint1(parseData[31]);
+                mURPosition.SetJoint2(parseData[32]);
+                mURPosition.SetJoint3(parseData[33]);
+                mURPosition.SetJoint4(parseData[34]);
+                mURPosition.SetJoint5(parseData[35]);
+                mURPosition.SetJoint6(parseData[36]);
+                this->updateURPosition();
+            }
+            // 坐标速度
+            if( parseData.size() >=66)
+            {
+                ui->label_x_speed->setText(QString::number(parseData[61], 'f', 3));
+                ui->label_y_speed->setText(QString::number(parseData[62], 'f', 3));
+                ui->label_z_speed->setText(QString::number(parseData[63], 'f', 3));
+                ui->label_rx_speed->setText(QString::number(parseData[64], 'f', 3));
+                ui->label_ry_speed->setText(QString::number(parseData[65], 'f', 3));
+                ui->label_ry_speed->setText(QString::number(parseData[66], 'f', 3));
+            }
 
-        // 电流电压
-        if( parseData.size() >=123)
-        {
-            ui->lineEdit_Voltage->setText(QString::number(parseData[122], 'g'));
-            ui->lineEdit_Current->setText(QString::number(parseData[123], 'd', 3));
+            //  Joint 温度
+            if( parseData.size() >=91)
+            {
+                ui->label_joint1_temperature->setText(QString::number(parseData[86], 'f', 1));
+                ui->label_joint2_temperature->setText(QString::number(parseData[87], 'f', 1));
+                ui->label_joint3_temperature->setText(QString::number(parseData[88], 'f', 1));
+                ui->label_joint4_temperature->setText(QString::number(parseData[89], 'f', 1));
+                ui->label_joint5_temperature->setText(QString::number(parseData[90], 'f', 1));
+                ui->label_joint6_temperature->setText(QString::number(parseData[91], 'f', 1));
+            }
+
+            //  Joint 电压
+            if( parseData.size() >=129)
+            {
+                ui->label_joint1_voltage->setText(QString::number(parseData[124], 'f', 1));
+                ui->label_joint2_voltage->setText(QString::number(parseData[125], 'f', 1));
+                ui->label_joint3_voltage->setText(QString::number(parseData[126], 'f', 1));
+                ui->label_joint4_voltage->setText(QString::number(parseData[127], 'f', 1));
+                ui->label_joint5_voltage->setText(QString::number(parseData[128], 'f', 1));
+                ui->label_joint6_voltage->setText(QString::number(parseData[129], 'f', 1));
+            }
+
+            //  Joint 电流
+            if( parseData.size() > 49)
+            {
+                ui->label_joint1_current->setText(QString::number(qAbs(parseData[43]), 'f', 1));
+                ui->label_joint2_current->setText(QString::number(qAbs(parseData[44]), 'f', 1));
+                ui->label_joint3_current->setText(QString::number(qAbs(parseData[45]), 'f', 1));
+                ui->label_joint4_current->setText(QString::number(qAbs(parseData[46]), 'f', 1));
+                ui->label_joint5_current->setText(QString::number(qAbs(parseData[47]), 'f', 1));
+                ui->label_joint6_current->setText(QString::number(qAbs(parseData[48]), 'f', 1));
+            }
+
+            // 电流电压
+            if( parseData.size() >=123)
+            {
+                ui->lineEdit_Voltage->setText(QString::number(parseData[122], 'f', 1));
+                ui->lineEdit_Current->setText(QString::number(parseData[123], 'f', 1));
+            }
+            if( parseData.size() >=101)
+            {
+                ui->label_RobotMode->setText(CreateHtmlStr(RobotMode[parseData[94]], (parseData[94]==3)?QColor(Qt::red):QColor(Qt::black)) );
+                ui->label_SafetyMode->setText(CreateHtmlStr(SafetyMode[parseData[101]], (parseData[101]>1)?QColor(Qt::red):QColor(Qt::black)) );
+            }
+            lazy_update = 0;
         }
-        if( parseData.size() >=101)
-        {
-            ui->label_RobotMode->setText(CreateHtmlStr(RobotMode[parseData[94]], (parseData[94]==3)?QColor(Qt::red):QColor(Qt::black)) );
-            ui->label_SafetyMode->setText(CreateHtmlStr(SafetyMode[parseData[101]], (parseData[101]>1)?QColor(Qt::red):QColor(Qt::black)) );
-        }
+        lazy_update++;
     }
 
     if (!ui->checkBox_Pause_Hex->isChecked())
@@ -255,21 +324,15 @@ void URControlPannel::on_pushButton_AddSleepfunc_clicked()
 
 void URControlPannel::on_pushButton_AddFolderPos_clicked()
 {
-    QString cmd = QString("[0,-100,160,120,0,0]");
+    QString cmd = QString("[0,-100,160,120,-90,0]*3.14159/180.0");
     ui->textEdit_Send->insertPlainText(cmd);
 }
 
 
 void URControlPannel::on_pushButton_AddZeroPos_clicked()
 {
-    QString cmd = QString("[0,-90,0,-90,0,0]");
+    QString cmd = QString("[0,-1.57,0,-1.57,0,0]");
     ui->textEdit_Send->insertPlainText(cmd);
-}
-
-
-void URControlPannel::on_pushButton_AddHomePos_clicked()
-{
-
 }
 
 
@@ -331,14 +394,14 @@ void URControlPannel::on_pushButton_CutPower_clicked()
 
 void URControlPannel::on_pushButton_ToZero_clicked()
 {
-    QString cmd = QString("movej([0,-90,0,-90,0,0],%1,%2)\n").arg(ui->horizontalSlider_MoveSpeed->value()/100.0*maxRadSpeed).arg(ui->horizontalSlider_Accelerations->value()/100.0*maxRadAcc);
+    QString cmd = QString("movej([0,-1.57,0,-1.57,0,0],%1,%2)\n").arg(ui->horizontalSlider_MoveSpeed->value()/100.0*maxRadSpeed).arg(ui->horizontalSlider_Accelerations->value()/100.0*maxRadAcc);
     this->sendCommand(cmd,false);
 }
 
 
 void URControlPannel::on_pushButton_ToFolder_clicked()
 {
-    QString cmd = QString("movej([0,-100,160,120,0,0],%1,%2)\n").arg(ui->horizontalSlider_MoveSpeed->value()/100.0*maxRadSpeed).arg(ui->horizontalSlider_Accelerations->value()/100.0*maxRadAcc);
+    QString cmd = QString("movej([0,-100,160,120,-90,0]*3.14159/180.0,%1,%2)\n").arg(ui->horizontalSlider_MoveSpeed->value()/100.0*maxRadSpeed).arg(ui->horizontalSlider_Accelerations->value()/100.0*maxRadAcc);
     this->sendCommand(cmd,false);
 }
 
@@ -399,10 +462,7 @@ void URControlPannel::on_pushButton_Stop_clicked()
 void URControlPannel::on_pushButton_X_P_pressed()
 {
     QString cmd;
-    cmd = QString("def move():\n\t" \
-            "sp=get_actual_tcp_speed()\n" \
-                  "speedl([sp[0]%%1+0.01,0,0,0,0,0], %2, 0.016)\n" \
-                  "end\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'd', 3));
+    cmd = QString("speedl([%1,0,0,0,0,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -410,10 +470,7 @@ void URControlPannel::on_pushButton_X_P_pressed()
 void URControlPannel::on_pushButton_X_N_pressed()
 {
     QString cmd;
-    cmd = QString("def move():\n\t" \
-            "sp=get_actual_tcp_speed()\n" \
-            "speedl([sp[0]%%1-0.01,0,0,0,0,0], -%2, 0.016)\n" \
-            "end\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'd', 3));
+    cmd = QString("speedl([-%1,0,0,0,0,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -421,10 +478,7 @@ void URControlPannel::on_pushButton_X_N_pressed()
 void URControlPannel::on_pushButton_Y_P_pressed()
 {
     QString cmd;
-    cmd = QString("def move():\n\t" \
-            "sp=get_actual_tcp_speed()\n" \
-            "speedl([0,sp[1]%%1+0.01,0,0,0,0], %2, 0.016)\n" \
-            "end\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'd', 3));
+    cmd = QString("speedl([0,%1,0,0,0,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -432,10 +486,7 @@ void URControlPannel::on_pushButton_Y_P_pressed()
 void URControlPannel::on_pushButton_Y_N_pressed()
 {
     QString cmd;
-    cmd = QString("def move():\n\t" \
-            "sp=get_actual_tcp_speed()\n" \
-            "speedl([0,sp[1]%%1-0.01,0,0,0,0], -%2, 0.016)\n" \
-            "end\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'd', 3));
+    cmd = QString("speedl([0,-%1,0,0,0,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -443,7 +494,7 @@ void URControlPannel::on_pushButton_Y_N_pressed()
 void URControlPannel::on_pushButton_Z_P_pressed()
 {
     QString cmd;
-    cmd = QString("speedl([0,0,%1,0,0,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed/500, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'd', 3));
+    cmd = QString("speedl([0,0,%1,0,0,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -451,10 +502,7 @@ void URControlPannel::on_pushButton_Z_P_pressed()
 void URControlPannel::on_pushButton_Z_N_pressed()
 {
     QString cmd;
-    cmd = QString("def move():\n\t" \
-            "sp=get_actual_tcp_speed()\n" \
-            "speedl([0,0,sp[2]%%1-0.01,0,0,0], -%2, 0.016)\n" \
-            "end\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'd', 3));
+    cmd = QString("speedl([0,0,-%1,0,0,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -462,10 +510,7 @@ void URControlPannel::on_pushButton_Z_N_pressed()
 void URControlPannel::on_pushButton_RX_P_pressed()
 {
     QString cmd;
-    cmd = QString("def move():\n\t" \
-            "sp=get_actual_tcp_speed()\n" \
-            "speedl([0,0,0,sp[3]%%1+0.01,0,0], %2, 0.016)\n" \
-            "end\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'd', 3));
+    cmd = QString("speedl([0,0,0,%1,0,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -473,10 +518,7 @@ void URControlPannel::on_pushButton_RX_P_pressed()
 void URControlPannel::on_pushButton_RX_N_pressed()
 {
     QString cmd;
-    cmd = QString("def move():\n\t" \
-            "sp=get_actual_tcp_speed()\n" \
-            "speedl([0,0,0,sp[3]%%1-0.01,0,0], -%2, 0.016)\n" \
-            "end\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'd', 3));
+    cmd = QString("speedl([0,0,0,-%1,0,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -484,10 +526,7 @@ void URControlPannel::on_pushButton_RX_N_pressed()
 void URControlPannel::on_pushButton_RY_P_pressed()
 {
     QString cmd;
-    cmd = QString("def move():\n\t" \
-            "sp=get_actual_tcp_speed()\n" \
-            "speedl([0,0,0,0,sp[4]%%1+0.01,0], %2, 0.016)\n" \
-            "end\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'd', 3));
+    cmd = QString("speedl([0,0,0,0,%1,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -495,10 +534,7 @@ void URControlPannel::on_pushButton_RY_P_pressed()
 void URControlPannel::on_pushButton_RY_N_pressed()
 {
     QString cmd;
-    cmd = QString("def move():\n\t" \
-            "sp=get_actual_tcp_speed()\n" \
-            "speedl([0,0,0,0,sp[4]%%1-0.01,0], -%2, 0.016)\n" \
-            "end\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'd', 3));
+    cmd = QString("speedl([0,0,0,0,-%1,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -506,10 +542,7 @@ void URControlPannel::on_pushButton_RY_N_pressed()
 void URControlPannel::on_pushButton_RZ_P_pressed()
 {
     QString cmd;
-    cmd = QString("def move():\n\t" \
-            "sp=get_actual_tcp_speed()\n" \
-            "speedl([0,0,0,0,0,sp[5]%%1+0.01], %2, 0.016)\n" \
-            "end\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'd', 3));
+    cmd = QString("speedl([0,0,0,0,0,%1], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -517,7 +550,7 @@ void URControlPannel::on_pushButton_RZ_P_pressed()
 void URControlPannel::on_pushButton_RZ_N_pressed()
 {
     QString cmd;
-    cmd = QString("speedl([0,0,0,0,0,-%1], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxAcc, 'd', 3));
+    cmd = QString("speedl([0,0,0,0,0,-%1], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -525,7 +558,7 @@ void URControlPannel::on_pushButton_RZ_N_pressed()
 void URControlPannel::on_pushButton_Joint1_P_pressed()
 {
     QString cmd;
-    cmd = QString("speedj([%1,0,0,0,0,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'd', 3));
+    cmd = QString("speedj([%1,0,0,0,0,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -533,7 +566,7 @@ void URControlPannel::on_pushButton_Joint1_P_pressed()
 void URControlPannel::on_pushButton_Joint1_N_pressed()
 {
     QString cmd;
-    cmd = QString("speedj([-%1,0,0,0,0,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'd', 3));
+    cmd = QString("speedj([-%1,0,0,0,0,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -541,7 +574,7 @@ void URControlPannel::on_pushButton_Joint1_N_pressed()
 void URControlPannel::on_pushButton_Joint2_P_pressed()
 {
     QString cmd;
-    cmd = QString("speedj([0,%1,0,0,0,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'd', 3));
+    cmd = QString("speedj([0,%1,0,0,0,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -549,7 +582,7 @@ void URControlPannel::on_pushButton_Joint2_P_pressed()
 void URControlPannel::on_pushButton_Joint2_N_pressed()
 {
     QString cmd;
-    cmd = QString("speedj([0,-%1,0,0,0,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'd', 3));
+    cmd = QString("speedj([0,-%1,0,0,0,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -557,7 +590,7 @@ void URControlPannel::on_pushButton_Joint2_N_pressed()
 void URControlPannel::on_pushButton_Joint3_P_pressed()
 {
     QString cmd;
-    cmd = QString("speedj([0,0,%1,0,0,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'd', 3));
+    cmd = QString("speedj([0,0,%1,0,0,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -565,7 +598,7 @@ void URControlPannel::on_pushButton_Joint3_P_pressed()
 void URControlPannel::on_pushButton_Joint3_N_pressed()
 {
     QString cmd;
-    cmd = QString("speedj([0,0,-%1,0,0,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'd', 3));
+    cmd = QString("speedj([0,0,-%1,0,0,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -573,7 +606,7 @@ void URControlPannel::on_pushButton_Joint3_N_pressed()
 void URControlPannel::on_pushButton_Joint4_P_pressed()
 {
     QString cmd;
-    cmd = QString("speedj([0,0,0,%1,0,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'd', 3));
+    cmd = QString("speedj([0,0,0,%1,0,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -581,7 +614,7 @@ void URControlPannel::on_pushButton_Joint4_P_pressed()
 void URControlPannel::on_pushButton_Joint4_N_pressed()
 {
     QString cmd;
-    cmd = QString("speedj([0,0,0,-%1,0,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'd', 3));
+    cmd = QString("speedj([0,0,0,-%1,0,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -589,7 +622,7 @@ void URControlPannel::on_pushButton_Joint4_N_pressed()
 void URControlPannel::on_pushButton_Joint5_P_pressed()
 {
     QString cmd;
-    cmd = QString("speedj([0,0,0,0,%1,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'd', 3));
+    cmd = QString("speedj([0,0,0,0,%1,0], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -597,7 +630,7 @@ void URControlPannel::on_pushButton_Joint5_P_pressed()
 void URControlPannel::on_pushButton_Joint5_N_pressed()
 {
     QString cmd;
-    cmd = QString("speedj([0,0,0,0,-%1,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'd', 3));
+    cmd = QString("speedj([0,0,0,0,-%1,0], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -605,7 +638,7 @@ void URControlPannel::on_pushButton_Joint5_N_pressed()
 void URControlPannel::on_pushButton_Joint6_P_pressed()
 {
     QString cmd;
-    cmd = QString("speedj([0,0,0,0,0,%1], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'd', 3));
+    cmd = QString("speedj([0,0,0,0,0,%1], %2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -613,7 +646,7 @@ void URControlPannel::on_pushButton_Joint6_P_pressed()
 void URControlPannel::on_pushButton_Joint6_N_pressed()
 {
     QString cmd;
-    cmd = QString("speedj([0,0,0,0,0,-%1], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'd', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'd', 3));
+    cmd = QString("speedj([0,0,0,0,0,-%1], -%2, 0.016)\n").arg(QString::number(ui->horizontalSlider_MoveSpeed->value()/100.00 * maxRadSpeed, 'f', 3), QString::number(ui->horizontalSlider_Accelerations->value()/100.00 * maxRadAcc, 'f', 3));
     this->sendCommand(cmd);
 }
 
@@ -628,5 +661,3 @@ void URControlPannel::on_horizontalSlider_Accelerations_valueChanged(int value)
 {
     ui->lineEdit_Accelerations->setText(QString::number(value));
 }
-
-

@@ -26,6 +26,10 @@ public:
     URControlPannel(QWidget *parent = nullptr);
     ~URControlPannel();
 
+protected:
+    void mousePressEvent(QMouseEvent *event);
+    void mouseReleaseEvent(QMouseEvent *event);
+
 private:
     void initConnection();
     void praseHexData(QByteArray array);
@@ -54,8 +58,6 @@ private slots:
     void on_pushButton_AddFolderPos_clicked();
 
     void on_pushButton_AddZeroPos_clicked();
-
-    void on_pushButton_AddHomePos_clicked();
 
     void on_pushButton_Clearsend_clicked();
 
@@ -139,11 +141,11 @@ private slots:
 
     void on_horizontalSlider_Accelerations_valueChanged(int value);
 
-
 private:
     Ui::URControlPannel *ui;
     URPosition mURPosition;
     TCPSocketObject* m_pTCPSocketObject_RealTime;
     TCPSocketObject* m_pTCPSocketObject_Dashboard;
+    bool mLazyUpdate;
 };
 #endif // URCONTROLPANNEL_H
